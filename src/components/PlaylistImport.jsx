@@ -1,43 +1,72 @@
 import { useState } from 'react';
-import { ListVideo, Download, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Youtube } from 'lucide-react';
+import { ListVideo, Download, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Youtube, Clock } from 'lucide-react';
+import { formatDuration } from '../utils/helpers';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function extractPlaylistId(url) {
   try {
     const u = new URL(url);
-    return u.searchParams.get('list') || null;
+    if (u.searchParams.has('list')) return u.searchParams.get('list');
+    return null;
   } catch {
-    const m = url.match(/[?&]list=([^&]+)/);
-    return m ? m[1] : null;
+    const match = url.match(/[?&]list=([^&]+)/);
+    return match ? match[1] : null;
   }
 }
 
-// Use a CORS proxy to fetch the YouTube RSS playlist feed
-async function fetchPlaylistVideos(playlistId) {
-  // YouTube RSS feed for playlists – public, no API key needed
-  const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
-  // Use allorigins as CORS proxy
-  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}`;
+// Helper to parse YouTube ISO 8601 duration (e.g. PT1H2M10S) to total seconds
+function parseISO8601Duration(duration) {
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  const hours = parseInt(match[1]) || 0;
+  const minutes = parseInt(match[2]) || 0;
+  const seconds = parseInt(match[3]) || 0;
+  return (hours * 3600) + (minutes * 60) + seconds;
+}
 
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error('Network error fetching playlist');
-  const data = await res.json();
-  if (!data.contents) throw new Error('Empty response from proxy');
+// Use YouTube API v3 to fetch videos and their durations
+// Make sure to add VITE_YOUTUBE_API_KEY=your_api_key in a .env file!
+async function fetchPlaylistVideosWithTime(playlistId) {
+  const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(data.contents, 'text/xml');
+  if (!API_KEY) {
+    throw new Error('API Key missing. Please add VITE_YOUTUBE_API_KEY to your .env file.');
+  }
 
-  const entries = Array.from(doc.querySelectorAll('entry'));
-  if (entries.length === 0) throw new Error('No videos found (playlist may be private or empty)');
+  // 1. Fetch Playlist Items
+  const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${playlistId}&key=${API_KEY}`;
+  const plRes = await fetch(playlistUrl);
+  if (!plRes.ok) throw new Error('Failed to fetch playlist or playlist is private.');
+  const plData = await plRes.json();
+  
+  if (!plData.items || plData.items.length === 0) {
+    throw new Error('No videos found in this playlist.');
+  }
 
-  return entries.map((entry, idx) => {
-    const videoId = entry.querySelector('videoId')?.textContent
-      || entry.querySelector('id')?.textContent?.split(':').pop();
-    const title   = entry.querySelector('title')?.textContent || `Video ${idx + 1}`;
-    const link    = `https://www.youtube.com/watch?v=${videoId}`;
-    const thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+  const items = plData.items;
+  const videoIds = items.map(item => item.contentDetails.videoId);
 
-    return { videoId, title, link, thumbnail };
+  // 2. Fetch Video Details (to get contentDetails.duration)
+  // Can only query 50 ids at a time, but since our maxResults above is 50, one call is enough.
+  const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoIds.join(',')}&key=${API_KEY}`;
+  const vidRes = await fetch(videosUrl);
+  if (!vidRes.ok) throw new Error('Failed to fetch video details.');
+  const vidData = await vidRes.json();
+
+  // Create a map of videoId -> duration in seconds
+  const durationMap = {};
+  vidData.items?.forEach(v => {
+    durationMap[v.id] = parseISO8601Duration(v.contentDetails.duration);
+  });
+
+  return items.map((item, idx) => {
+    const videoId = item.contentDetails.videoId;
+    const title = item.snippet.title;
+    const link = `https://www.youtube.com/watch?v=${videoId}`;
+    const thumbnail = item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+    const duration = durationMap[videoId] || 0;
+
+    return { videoId, title, link, thumbnail, duration };
   });
 }
 
@@ -60,11 +89,11 @@ export default function PlaylistImport({ courses, onAddVideo }) {
     if (!playlistId) { setError('Could not find a playlist ID in that URL. Make sure it contains ?list=...'); return; }
     setLoading(true);
     try {
-      const vids = await fetchPlaylistVideos(playlistId);
+      const vids = await fetchPlaylistVideosWithTime(playlistId);
       setVideos(vids);
       setExpanded(true);
     } catch (err) {
-      setError(err.message || 'Failed to fetch playlist');
+      setError(err.message || 'Error communicating with YouTube API');
     } finally {
       setLoading(false);
     }
@@ -80,7 +109,7 @@ export default function PlaylistImport({ courses, onAddVideo }) {
         title: vid.title,
         link: vid.link,
         platform: 'YouTube',
-        duration: 0,
+        duration: vid.duration, // ⏳ Now we actually have the exact time!
         course,
         tag: 'playlist',
         completed: false,
@@ -121,7 +150,7 @@ export default function PlaylistImport({ courses, onAddVideo }) {
       {expanded && (
         <div className="px-6 pb-6 space-y-4">
           <p className="text-xs text-slate-500 dark:text-slate-400 tracking-wide font-medium relative z-10 -mt-2">
-            Paste a YouTube playlist link to auto-fetch all videos.
+            Paste a YouTube playlist link to auto-fetch videos + duration.
           </p>
           
           {/* URL input row */}
@@ -195,29 +224,23 @@ export default function PlaylistImport({ courses, onAddVideo }) {
                           : 'border-slate-100 dark:border-slate-700/50 bg-white/50 dark:bg-slate-800/30 hover:bg-white dark:hover:bg-slate-800'
                       }`}
                     >
-                      {/* Thumbnail */}
-                      <div className="relative w-16 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-slate-200 dark:bg-slate-700">
-                        <img src={vid.thumbnail} alt="" className="w-full h-full object-cover" />
-                      </div>
+                      {/* Thumbnail & duration overlay */}
+                      <a href={vid.link} target="_blank" rel="noreferrer" className="relative w-20 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-slate-200 dark:bg-slate-700 group block">
+                        <img src={vid.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        <div className="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">
+                          {formatDuration(vid.duration)}
+                        </div>
+                      </a>
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium line-clamp-1 ${done ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-white'}`}>
+                        <p className={`text-sm font-medium line-clamp-2 leading-tight mb-1 ${done ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-white'}`}>
                           {vid.title}
                         </p>
                       </div>
 
                       {/* Actions */}
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <a
-                          href={vid.link}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Watch on YouTube"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                        >
-                          <Youtube size={16} />
-                        </a>
                         {done ? (
                           <span className="flex items-center gap-1 px-2.5 py-1 text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-wider bg-green-100/50 dark:bg-green-900/30 rounded-lg">
                             <CheckCircle2 size={14} /> Added
