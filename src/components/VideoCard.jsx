@@ -13,75 +13,102 @@ export default function VideoCard({ video, onToggleComplete, onUpdateNotes }) {
   };
 
   return (
-    <div className={`p-5 rounded-2xl border transition-all duration-300 flex flex-col gap-3
-      ${video.completed 
-        ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-75' 
-        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md'
+    <div className={`video-card p-5 rounded-2xl flex flex-col gap-3 relative overflow-hidden backdrop-blur-sm transition-all duration-300
+      ${video.completed
+        ? 'glass-card opacity-80 border-green-200 dark:border-green-900/30 bg-green-50/50 dark:bg-green-900/10'
+        : 'glass-card bg-white/70 dark:bg-slate-800/70 hover:bg-white/90 dark:hover:bg-slate-800/90'
       }`}
     >
-      <div className="flex justify-between items-start gap-4">
-        <h3 className={`font-semibold text-lg line-clamp-2 flex-1 ${video.completed ? 'line-through text-slate-500' : 'text-slate-900 dark:text-white'}`}>
-          <a href={video.link} target="_blank" rel="noreferrer" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-            {video.title}
+      {/* Decorative top border */}
+      <div className={`absolute top-0 left-0 right-0 h-1 ${video.completed ? 'bg-green-400' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`} />
+
+      {/* Video Thumbnail (if present) / Header */}
+      <div className="flex gap-4">
+        {video.thumbnail && (
+          <a href={video.link} target="_blank" rel="noreferrer" className="flex-shrink-0 group relative rounded-xl overflow-hidden block w-24 h-16 bg-slate-200 dark:bg-slate-700">
+            <img src={video.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
+            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+              {formatDuration(video.duration) || '🔗'}
+            </div>
           </a>
-        </h3>
-        <div className="flex-shrink-0 mt-1">
-          {isYouTube ? (
-            <Youtube className="text-red-500" size={24} />
-          ) : video.platform === 'Telegram' ? (
-            <Send className="text-sky-500" size={24} />
-          ) : (
-            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700" />
-          )}
+        )}
+        
+        <div className="flex-1 min-w-0 flex justify-between items-start gap-4">
+          <h3 className={`font-semibold text-base leading-tight line-clamp-2 flex-1 mt-1 ${video.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-900 dark:text-white'}`}>
+            <a href={video.link} target="_blank" rel="noreferrer" className="hover:text-orange-500 dark:hover:text-orange-400 transition-colors">
+              {video.title}
+            </a>
+          </h3>
+          <div className="flex-shrink-0 mt-1">
+            <a href={video.link} target="_blank" rel="noreferrer" className="p-2 rounded-xl bg-slate-100 dark:bg-slate-700/50 hover:bg-orange-100 dark:hover:bg-slate-600 transition-colors inline-block group">
+              {isYouTube ? (
+                <Youtube className="text-red-500 group-hover:scale-110 transition-transform" size={20} />
+              ) : video.platform === 'Telegram' ? (
+                <Send className="text-sky-500 group-hover:scale-110 transition-transform" size={20} />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-orange-200 dark:bg-slate-600 group-hover:scale-110 transition-transform" />
+              )}
+            </a>
+          </div>
         </div>
       </div>
-      
-      <div className="flex flex-wrap gap-2 items-center text-sm mt-auto">
-        <span className="px-2.5 py-1 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium">
-          {video.course}
+
+      {/* Meta info */}
+      <div className="flex flex-wrap gap-2 items-center text-xs mt-auto pt-2 border-t border-slate-100 dark:border-slate-700/50">
+        <span className="badge bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 shadow-sm border border-orange-200/50 dark:border-orange-800/50">
+          📍 {video.course}
         </span>
         {video.tag && (
-          <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+          <span className="badge bg-amber-50 dark:bg-slate-700 text-amber-700 dark:text-slate-300 border border-amber-200/50 dark:border-slate-600">
             #{video.tag}
           </span>
         )}
-        <span className="flex items-center gap-1 text-slate-500 ml-auto">
-          <Clock size={14} />
-          {formatDuration(video.duration)}
-        </span>
+        {!video.thumbnail && (
+          <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 ml-auto font-medium">
+            <Clock size={13} />
+            {formatDuration(video.duration)}
+          </span>
+        )}
       </div>
 
-      <div className="flex gap-2">
+      {/* Actions */}
+      <div className="flex gap-2 mt-2">
         <button
           onClick={() => setShowNotes(!showNotes)}
           title="Notes"
-          className="mt-2 w-10 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors flex-shrink-0"
+          className={`flex-shrink-0 w-11 py-2.5 rounded-xl border flex items-center justify-center transition-colors shadow-sm
+            ${showNotes 
+              ? 'bg-orange-500 text-white border-orange-500 glow-orange' 
+              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-orange-500 dark:hover:text-orange-400 hover:border-orange-200 dark:hover:border-slate-600'
+            }`}
         >
           <FileText size={18} />
         </button>
         <button
           onClick={() => onToggleComplete(video.id)}
-          className={`mt-2 flex-1 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors
-            ${video.completed 
-              ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-              : 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm
+            ${video.completed
+              ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600'
+              : 'btn-primary border border-transparent'
             }`}
         >
-          {video.completed ? <><Check size={18} /> Completed</> : <><CheckCircle2 size={18} /> Mark as Done</>}
+          {video.completed ? <><Check size={16} strokeWidth={3} /> Completed</> : <><CheckCircle2 size={16} /> Mark as Done</>}
         </button>
       </div>
 
+      {/* Notes text area */}
       {showNotes && (
-        <div className="mt-2 border-t border-slate-200 dark:border-slate-700 pt-3">
+        <div className="mt-2 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 slide-in">
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Add your study notes here..."
-            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-sm min-h-[80px] transition-shadow"
+            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 dark:text-white min-h-[80px] transition-shadow shadow-inner resize-none"
           />
-          <button 
+          <button
             onClick={saveNotes}
-            className="mt-2 text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 px-3 py-1.5 rounded-lg w-full hover:bg-indigo-200 transition-colors"
+            className="mt-2 w-full text-xs font-bold uppercase tracking-wider bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-4 py-2 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors border border-orange-200 dark:border-orange-800/50"
           >
             Save Notes
           </button>

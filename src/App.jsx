@@ -12,6 +12,7 @@ import CompletedFeed from './components/CompletedFeed';
 import Quotes from './components/Quotes';
 import Pomodoro from './components/Pomodoro';
 import Badges from './components/Badges';
+import PlaylistImport from './components/PlaylistImport';
 import CalendarView from './components/CalendarView';
 import CourseProgress from './components/CourseProgress';
 import GoalAnalytics from './components/GoalAnalytics';
@@ -242,6 +243,7 @@ export default function App() {
               <Pomodoro />
               <AddCourseForm onAddCourse={handleAddCourse} />
               <AddVideoForm courses={courses} onAddVideo={handleAddVideo} />
+              <PlaylistImport courses={courses} onAddVideo={handleAddVideo} />
             </div>
           </div>
         )}
